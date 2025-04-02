@@ -11,19 +11,26 @@
 
 using namespace std::literals::chrono_literals;
 
-struct Message {
+struct Message
+{
 	int counter;
 	std::string message;
 };
 
-void runPingPong(std::mutex& mtx, std::condition_variable& cv, std::queue<Message>& msg_queue, std::stop_source& stop_src) {
+void runPingPong(std::mutex& mtx, std::condition_variable& cv, std::queue<Message>& msg_queue, std::stop_source& stop_src)
+{
 	std::stop_token stop_tkn = stop_src.get_token();
 	std::thread::id this_id = std::this_thread::get_id();
 	std::unique_lock lck(mtx, std::defer_lock);
 
-	while (!stop_tkn.stop_requested()) {
+	while (!stop_tkn.stop_requested())
+	{
 		lck.lock();
-		cv.wait(lck, [&msg_queue]{ return !msg_queue.empty(); });
+		cv.wait(lck, [&msg_queue, &stop_tkn] { return !msg_queue.empty() || stop_tkn.stop_requested(); });
+
+		if (stop_tkn.stop_requested())
+			return;
+
 		Message incoming_msg = msg_queue.front();
 		msg_queue.pop();
 		std::osyncstream(std::cout) << std::format("T[{}] received [c={}, t={}]", this_id, incoming_msg.counter, incoming_msg.message) << "\n";
@@ -38,7 +45,8 @@ void runPingPong(std::mutex& mtx, std::condition_variable& cv, std::queue<Messag
 	}
 }
 
-int main() {
+int main()
+{
 	std::mutex mtx;
 	std::condition_variable cv;
 	std::queue<Message> msg_queue;
